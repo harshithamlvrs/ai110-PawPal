@@ -43,9 +43,13 @@ I included four classes:
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+_Did your design change during implementation?_ Yes
+_If yes, describe at least one change and why you made it._
 
+Some of the changes I made was:
+    1. Added explicit recurrence typing via Recurrence enum near the top of pawpal_system.py. This explicitly defines the recurrance of a specific task (Daily, weekly, monthly)
+    2. Strengthened owner relationship: Owner now tracks pets. Added Owner.add_pet(...). Scheduler now takes owner in its constructor and links pets through that owner.
+    3. mark_complete sets completion status. add_task appends to pet task list. pets_by_id and tasks_by_id dictionaries so that we can resolve issues in the future by looking at the ID instead of scanning everything
 ---
 
 ## 2. Scheduling Logic and Tradeoffs
@@ -66,13 +70,18 @@ I included four classes:
 
 **a. How you used AI**
 
-- How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
-- What kinds of prompts or questions were most helpful?
+_How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?_
+I used AI for creating the UML diagram and asking it to debug/suggest changes. 
+
+_What kinds of prompts or questions were most helpful?_
+The prompt about asking the AI to create the UML diagram based on my initial plan was very helpful. I plugged that code into the Mermaid Live Editor which generated a UML diagram. This visually explained my thoughts and what I wanted the code to do.
+
 
 **b. Judgment and verification**
 
-- Describe one moment where you did not accept an AI suggestion as-is.
-- How did you evaluate or verify what the AI suggested?
+_Describe one moment where you did not accept an AI suggestion as-is._
+_How did you evaluate or verify what the AI suggested?_
+One moment was that I asked AI to create a skeleton of the classes and what implementation of the UML diagram would like. In the code that it suggested, I noticed that it duplicated the pet_ids in both the Owner class and the Scheduler. So, I asked it to use Scheduler to access each Owner and the Owners will have direct access to the pets and task access.
 
 ---
 
