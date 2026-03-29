@@ -4,8 +4,42 @@
 
 **a. Initial design**
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
+_Briefly describe your initial UML design._
+
+My initial design had four classes connected in a simple hierarchy:
+
+```
+User/Owner                          Scheduler
+─────────────────             ──────────────────────────────
+- name: string                - pets: List[Pet]
+──────────────────            ──────────────────────────────
++ EnterName()                 + add_pet(pet: Pet)
+                              + get_upcoming_tasks(): List
+                              + check_conflicts(task: Task): bool
+        |                              |
+        | owns (1..*)                  | manages (1..*)
+        ▼                              ▼
+Pet                           Task
+─────────────────────────     ──────────────────────────────
+- id: int                     - id: int
+- name: string                - description: string
+- breed: string               - due_time: datetime
+- age: int                    - duration_mins: int
+- tasks: List[Task]           - is_completed: bool
+─────────────────────────     - frequency: string
++ EnterName()                 ──────────────────────────────
++ EnterAge()                  + mark_complete()
++ EnterBreed()
++ add_task(task: Task)
+```
+
+_What classes did you include, and what responsibilities did you assign to each?_
+
+I included four classes:
+- **User** — represents the pet owner; stores the owner's name and handles input.
+- **Pet** — represents an individual pet; holds the pet's identity (id=Identifies which pet if the owner has multiple pets, name, breed, age) and a list of tasks to care for the pet.
+- **Task** — represents a single care activity (e.g., feeding, walk); stores timing, duration, completion status, and recurrence frequency.
+- **Scheduler** — the central coordinator; holds all pets and is responsible for ordering upcoming tasks and detecting time conflicts between tasks.
 
 **b. Design changes**
 
