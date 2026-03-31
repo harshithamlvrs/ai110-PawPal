@@ -12,6 +12,24 @@ class Recurrence(str, Enum):
 	WEEKLY = "weekly"
 
 
+@dataclass
+class ConflictInfo:
+	"""Lightweight conflict warning info for a task overlap."""
+
+	conflicting_pet_name: str
+	conflicting_task_description: str
+	conflicting_task_start: datetime
+	conflicting_task_end: datetime
+
+	def warning_message(self) -> str:
+		"""Return a human-readable warning message for this conflict."""
+		return (
+			f"⚠️ Overlaps with '{self.conflicting_task_description}' "
+			f"for {self.conflicting_pet_name} "
+			f"({self.conflicting_task_start.strftime('%H:%M')}–{self.conflicting_task_end.strftime('%H:%M')})"
+		)
+
+
 class Owner:
 	"""Represents the pet owner."""
 
@@ -35,16 +53,7 @@ class Owner:
 			if pet.id == pet_id:
 				return pet
 		return None
-		
-# ─look up pet by name (case-insensitive) ──────────────────────────
-	def get_pet_by_name(self, name: str) -> Optional["Pet"]:
-        """Return the first pet whose name matches (case-insensitive), or None."""
-        name_lower = name.strip().lower()
-    	for pet in self.pets:
-            if pet.name.strip().lower() == name_lower:
-                return pet
-        return None
-	
+
 	def get_all_tasks(self, include_completed: bool = True) -> List["Task"]:
 		"""Collect tasks across all pets owned by this owner."""
 		all_tasks = [task for pet in self.pets for task in pet.tasks]
@@ -122,14 +131,7 @@ class Scheduler:
 
 	def __init__(self, owner: Owner) -> None:
 		self.owner = owner
-		self._next_task_id: int = 1 #auto-increment ID for generated tasks
 
-	def _new_id(self) -> int:
-        """Return a fresh unique task ID."""
-        tid = self._next_task_id
-        self._next_task_id += 1
-        return tid
-	
 	def add_pet(self, pet: Pet) -> None:
 		"""Register a pet in the scheduler."""
 		self.owner.add_pet(pet)
@@ -149,94 +151,95 @@ class Scheduler:
 		"""Retrieve every task across all owner pets."""
 		return self.owner.get_all_tasks(include_completed=include_completed)
 
+	def filter_tasks(self, is_completed: Optional[bool] = None, pet_name: Optional[str] = None) -> List[Task]:
+		"""Filter tasks by completion status and/or pet name.
+
+		If both filters are provided, a task must match both.
+		"""
+		normalized_pet_name = pet_name.strip().lower() if pet_name is not None else None
+		filtered_tasks: List[Task] = []
+
+		for pet in self.owner.pets:
+			if normalized_pet_name is not None and pet.name.lower() != normalized_pet_name:
+				continue
+			for task in pet.tasks:
+				if is_completed is not None and task.is_completed != is_completed:
+					continue
+				filtered_tasks.append(task)
+
+		return filtered_tasks
+
 	def get_upcoming_tasks(self) -> List[Task]:
 		"""Return tasks that should be scheduled soon."""
 		all_tasks = self.get_all_tasks(include_completed=False)
 		return sorted(all_tasks, key=lambda task: task.start_time)
 
+	def detect_conflicts(self, task: Task) -> List[ConflictInfo]:
+		"""Detect conflicts and return detailed warning info for each overlap.
+		
+		Lightweight: scans all pets' upcoming tasks once and returns structured conflict data.
+		Each conflict includes the pet name, conflicting task details, and timing.
+		"""
+		conflicts: List[ConflictInfo] = []
+		for pet in self.owner.pets:
+			for existing_task in pet.tasks:
+				if existing_task.id == task.id or existing_task.is_completed:
+					continue
+				overlaps = task.start_time < existing_task.end_time and existing_task.start_time < task.end_time
+				if overlaps:
+					conflicts.append(
+						ConflictInfo(
+							conflicting_pet_name=pet.name,
+							conflicting_task_description=existing_task.description,
+							conflicting_task_start=existing_task.start_time,
+							conflicting_task_end=existing_task.end_time,
+						)
+					)
+		return conflicts
+
 	def check_conflicts(self, task: Task) -> bool:
-		"""Check whether a task conflicts with existing tasks."""
-		for existing_task in self.get_upcoming_tasks():
-			if existing_task.id == task.id:
-				continue
-			overlaps = task.start_time < existing_task.end_time and existing_task.start_time < task.end_time
-			if overlaps:
-				return True
-		return False
+		"""Check whether a task conflicts with existing tasks (deprecated: use detect_conflicts instead)."""
+		return len(self.detect_conflicts(task)) > 0
+
+	def _next_task_id_for_pet(self, pet: Pet) -> int:
+		"""Return the next available task id for a given pet."""
+		if not pet.tasks:
+			return 1
+		return max(existing_task.id for existing_task in pet.tasks) + 1
+
+	def _next_start_time(self, task: Task) -> Optional[datetime]:
+		"""Compute the next start time for recurring tasks."""
+		if task.recurrence == Recurrence.DAILY:
+			return task.start_time + timedelta(days=1) 
+		if task.recurrence == Recurrence.WEEKLY:
+			return task.start_time + timedelta(days=7)
+		return None
 
 	def mark_task_complete(self, task_id: int) -> bool:
 		"""Mark a task complete by id and report whether it was found."""
-		for task in self.get_all_tasks(include_completed=True):
-			if task.id == task_id:
-				task.mark_complete()
+		for pet in self.owner.pets:
+			task = pet.get_task(task_id)
+			if task is None:
+				continue
+
+			if task.is_completed:
 				return True
+
+			task.mark_complete()
+
+			next_start = self._next_start_time(task)
+			if next_start is not None:
+				next_task = Task(
+					id=self._next_task_id_for_pet(pet),
+					description=task.description,
+					start_time=next_start,
+					duration_mins=task.duration_mins,
+					priority=task.priority,
+					is_completed=False,
+					recurrence=task.recurrence,
+				)
+				pet.add_task(next_task)
+
+			return True
 		return False
-
-	# ── NEW 1: Expand recurring tasks into concrete instances ────────────────
-	def expand_recurring_tasks(
-    	self,
-    	pet_id: int,
-    	start_date: datetime,
-    	end_date: datetime,
-    ) -> List[Task]:
-        """
-        For every recurring task on a pet, generate concrete Task instances
-        between start_date and end_date (inclusive by day) and attach them
-        to the pet.  Returns the list of newly created tasks.
-
-        - DAILY  → one copy per calendar day in the range
-        - WEEKLY → one copy per week (same weekday as the template's start_time)
-        - ONCE   → skipped (already a one-off)
-        """
-    	pet = self.owner.get_pet(pet_id)
-    	if pet is None:
-    		raise ValueError(f"Pet id {pet_id} was not found.")
-
-        # Only templates that are recurring and not yet expanded past end_date
-		templates = [t for t in pet.tasks if t.recurrence != Recurrence.ONCE]
-		new_tasks: List[Task] = []
-
-		for tmpl in templates:
-			if tmpl.recurrence == Recurrence.DAILY:
-				step = timedelta(days=1)
-			else:  # WEEKLY
-				step = timedelta(weeks=1)
-
-            # Start from the template's own date, walk forward until end_date
-            cursor = tmpl.start_time
-            while cursor.date() <= end_date.date():
-                if cursor.date() >= start_date.date() and cursor != tmpl.start_time:
-                    new_task = Task(
-                        id=self._new_id(),
-                        description=tmpl.description,
-                        start_time=cursor,
-                        duration_mins=tmpl.duration_mins,
-                        priority=tmpl.priority,
-                        recurrence=Recurrence.ONCE,  # generated copy is a one-off
-                    )
-                    pet.add_task(new_task)
-                    new_tasks.append(new_task)
-                cursor += step
-
-        return new_tasks
-
-    # ── NEW 2: Filter tasks by pet name ──────────────────────────────────────
-    def get_tasks_by_pet_name(
-        self,
-        name: str,
-        include_completed: bool = True,
-    ) -> List[Task]:
-        """
-        Return all tasks for the pet whose name matches (case-insensitive).
-        Raises ValueError if no pet with that name exists.
-		Use the helper function: get_pet_name
-        """
-        pet = self.owner.get_pet_by_name(name)
-        if pet is None:
-            raise ValueError(f"No pet named '{name}' found.")
-        tasks = list(pet.tasks)
-        if not include_completed:
-            tasks = [t for t in tasks if not t.is_completed]
-        return sorted(tasks, key=lambda t: t.start_time)
-
-
+	

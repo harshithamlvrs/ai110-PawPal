@@ -1,4 +1,8 @@
 import streamlit as st
+from pawpal_system import Owner, Pet, Task, Scheduler, Recurrence
+import datetime
+
+#add pet and schedule task ( replace placeholders with calls to methods from pawpal_system.py)
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
@@ -38,51 +42,106 @@ At minimum, your system should:
 
 st.divider()
 
-st.subheader("Quick Demo Inputs (UI only)")
-owner_name = st.text_input("Owner name", value="Jordan")
-pet_name = st.text_input("Pet name", value="Mochi")
-species = st.selectbox("Species", ["dog", "cat", "other"])
+# --- Session state initialization ---
+if "scheduler" not in st.session_state:
+    st.session_state.scheduler = Scheduler(owner=Owner(name=""))
+if "next_pet_id" not in st.session_state:
+    st.session_state.next_pet_id = 1
+if "next_task_id" not in st.session_state:
+    st.session_state.next_task_id = 1
 
-st.markdown("### Tasks")
-st.caption("Add a few tasks. In your final version, these should feed into your scheduler.")
+scheduler: Scheduler = st.session_state.scheduler
 
-if "tasks" not in st.session_state:
-    st.session_state.tasks = []
+st.subheader("Owner")
+owner_name = st.text_input("Owner name", value=scheduler.owner.name or "Jordan")
+if owner_name != scheduler.owner.name:
+    scheduler.owner.enter_name(owner_name)
 
-col1, col2, col3 = st.columns(3)
-with col1:
-    task_title = st.text_input("Task title", value="Morning walk")
-with col2:
-    duration = st.number_input("Duration (minutes)", min_value=1, max_value=240, value=20)
-with col3:
-    priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
+st.markdown("### Add a Pet")
+with st.form("add_pet_form"):
+    pet_name = st.text_input("Pet name", value="Mochi")
+    breed = st.text_input("Breed / Species", value="Labrador")
+    age = st.number_input("Age (years)", min_value=0, max_value=30, value=2)
+    submitted_pet = st.form_submit_button("Add Pet")
 
-if st.button("Add task"):
-    st.session_state.tasks.append(
-        {"title": task_title, "duration_minutes": int(duration), "priority": priority}
+if submitted_pet:
+    new_pet = Pet(
+        id=st.session_state.next_pet_id,
+        name=pet_name,
+        breed=breed,
+        age=int(age),
     )
+    try:
+        # Owner.add_pet() registers the pet and prevents duplicate IDs
+        scheduler.add_pet(new_pet)
+        st.session_state.next_pet_id += 1
+        st.success(f"Added pet: {pet_name}")
+    except ValueError as e:
+        st.error(str(e))
 
-if st.session_state.tasks:
-    st.write("Current tasks:")
-    st.table(st.session_state.tasks)
+pets = scheduler.get_pets()
+if pets:
+    st.write("Registered pets:")
+    st.table([{"ID": p.id, "Name": p.name, "Breed": p.breed, "Age": p.age} for p in pets])
 else:
-    st.info("No tasks yet. Add one above.")
+    st.info("No pets registered yet.")
+
+st.markdown("### Schedule a Task")
+if not pets:
+    st.warning("Add a pet first before scheduling tasks.")
+else:
+    pet_options = {f"{p.name} (ID {p.id})": p.id for p in pets}
+    with st.form("add_task_form"):
+        selected_pet_label = st.selectbox("Select pet", list(pet_options.keys()))
+        task_desc = st.text_input("Task description", value="Morning walk")
+        task_date = st.date_input("Date", value=datetime.date.today())
+        task_time = st.time_input("Start time", value=datetime.time(8, 0))
+        duration = st.number_input("Duration (minutes)", min_value=1, max_value=240, value=20)
+        priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
+        submitted_task = st.form_submit_button("Add Task")
+
+    if submitted_task:
+        start_dt = datetime.datetime.combine(task_date, task_time)
+        new_task = Task(
+            id=st.session_state.next_task_id,
+            description=task_desc,
+            start_time=start_dt,
+            duration_mins=int(duration),
+            priority=priority,
+        )
+        pet_id = pet_options[selected_pet_label]
+        conflicts = scheduler.detect_conflicts(new_task)  # Get detailed conflict info instead of boolean
+        try:
+            # Scheduler.add_task_to_pet() looks up the pet by ID and calls pet.add_task()
+            scheduler.add_task_to_pet(pet_id, new_task)
+            st.session_state.next_task_id += 1
+            if conflicts:
+                # Display each conflict as a separate warning with contextual details
+                st.warning(f"Task added, but **{len(conflicts)} conflict(s) detected**:")
+                for conflict in conflicts:
+                    st.warning(conflict.warning_message())
+            else:
+                st.success(f"'{task_desc}' scheduled for {start_dt.strftime('%b %d at %H:%M')}.")
+        except ValueError as e:
+            st.error(str(e))
 
 st.divider()
 
-st.subheader("Build Schedule")
-st.caption("This button should call your scheduling logic once you implement it.")
+st.subheader("Upcoming Schedule")
+st.caption("Calls Scheduler.get_upcoming_tasks() — returns incomplete tasks sorted by start time.")
 
-if st.button("Generate schedule"):
-    st.warning(
-        "Not implemented yet. Next step: create your scheduling logic (classes/functions) and call it here."
-    )
-    st.markdown(
-        """
-Suggested approach:
-1. Design your UML (draft).
-2. Create class stubs (no logic).
-3. Implement scheduling behavior.
-4. Connect your scheduler here and display results.
-"""
-    )
+# Scheduler.get_upcoming_tasks() sorts by start_time and excludes completed tasks
+upcoming = scheduler.get_upcoming_tasks()
+if upcoming:
+    st.table([
+        {
+            "Description": t.description,
+            "Start": t.start_time.strftime("%Y-%m-%d %H:%M"),
+            "End": t.end_time.strftime("%H:%M"),
+            "Duration (min)": t.duration_mins,
+            "Priority": t.priority,
+        }
+        for t in upcoming
+    ])
+else:
+    st.info("No upcoming tasks. Add tasks above.")
