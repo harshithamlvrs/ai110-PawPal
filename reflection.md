@@ -55,15 +55,15 @@ Some of the changes I made was:
 ## 2. Scheduling Logic and Tradeoffs
 
 **a. Constraints and priorities**
-
-- What constraints does your scheduler consider (for example: time, priority, preferences)?
-- How did you decide which constraints mattered most?
+_What constraints does your scheduler consider (for example: time, priority, preferences)?_
+_How did you decide which constraints mattered most?_
+My scheduler considers the time and priority of the tasks. It categorizes the tasks based on the time (start time of the tasks in sequential order) and then puts the highest priority at first ending with the lowest priority. I constantly tested the website as I was coding to decide on the constraints that mattered the most. 
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
-
+_Describe one tradeoff your scheduler makes._
+_Why is that tradeoff reasonable for this scenario?_
+One tradeoff is that the scheduler keeps showing ALL of the time-conflict warnings to the user. But, this tradeoff is reasonable because the user can look over the past warnings and make sure to not repeat them.
 ---
 
 ## 3. AI Collaboration
@@ -108,6 +108,7 @@ One moment was that I asked AI to create a skeleton of the classes and what impl
 **b. What you would improve**
 
 - If you had another iteration, what would you improve or redesign?
+  Right now, the scheduler warns the user about time conflicts but it doesn't provide them an option to delete or change the task. I would try to improve the design by including this change.
 
 **c. Key takeaway**
 
