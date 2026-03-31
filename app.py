@@ -98,6 +98,12 @@ else:
         task_time = st.time_input("Start time", value=datetime.time(8, 0))
         duration = st.number_input("Duration (minutes)", min_value=1, max_value=240, value=20)
         priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
+        recurrence_value = st.selectbox(
+            "Recurrence",
+            [Recurrence.ONCE.value, Recurrence.DAILY.value, Recurrence.WEEKLY.value],
+            index=0,
+            help="Set this task to repeat automatically when you mark it complete.",
+        )
         submitted_task = st.form_submit_button("Add Task")
 
     if submitted_task:
@@ -108,6 +114,7 @@ else:
             start_time=start_dt,
             duration_mins=int(duration),
             priority=priority,
+            recurrence=Recurrence(recurrence_value),
         )
         pet_id = pet_options[selected_pet_label]
         conflicts = scheduler.detect_conflicts(new_task)  # Get detailed conflict info instead of boolean
@@ -140,8 +147,33 @@ if upcoming:
             "End": t.end_time.strftime("%H:%M"),
             "Duration (min)": t.duration_mins,
             "Priority": t.priority,
+            "Recurrence": t.recurrence.value,
         }
         for t in upcoming
     ])
+
+    task_options = {
+        f"{t.description} | {t.start_time.strftime('%Y-%m-%d %H:%M')} | {t.recurrence.value}": t
+        for t in upcoming
+    }
+    with st.form("mark_complete_form"):
+        st.markdown("### Mark Task Complete")
+        selected_task_label = st.selectbox(
+            "Select an upcoming task",
+            list(task_options.keys()),
+        )
+        submitted_complete = st.form_submit_button("Mark Complete")
+
+    if submitted_complete:
+        selected_task = task_options[selected_task_label]
+        updated = scheduler.mark_task_complete(task_id=selected_task.id)
+        if updated:
+            st.success(
+                f"Marked '{selected_task.description}' complete. "
+                "If recurring, the next occurrence was created automatically."
+            )
+            st.rerun()
+        else:
+            st.error("Unable to mark task complete. Please refresh and try again.")
 else:
     st.info("No upcoming tasks. Add tasks above.")
