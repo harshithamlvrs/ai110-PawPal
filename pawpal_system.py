@@ -35,7 +35,16 @@ class Owner:
 			if pet.id == pet_id:
 				return pet
 		return None
-
+		
+# ─look up pet by name (case-insensitive) ──────────────────────────
+	def get_pet_by_name(self, name: str) -> Optional["Pet"]:
+        """Return the first pet whose name matches (case-insensitive), or None."""
+        name_lower = name.strip().lower()
+    	for pet in self.pets:
+            if pet.name.strip().lower() == name_lower:
+                return pet
+        return None
+	
 	def get_all_tasks(self, include_completed: bool = True) -> List["Task"]:
 		"""Collect tasks across all pets owned by this owner."""
 		all_tasks = [task for pet in self.pets for task in pet.tasks]
@@ -113,7 +122,14 @@ class Scheduler:
 
 	def __init__(self, owner: Owner) -> None:
 		self.owner = owner
+		self._next_task_id: int = 1 #auto-increment ID for generated tasks
 
+	def _new_id(self) -> int:
+        """Return a fresh unique task ID."""
+        tid = self._next_task_id
+        self._next_task_id += 1
+        return tid
+	
 	def add_pet(self, pet: Pet) -> None:
 		"""Register a pet in the scheduler."""
 		self.owner.add_pet(pet)
@@ -155,3 +171,72 @@ class Scheduler:
 				task.mark_complete()
 				return True
 		return False
+
+	# ── NEW 1: Expand recurring tasks into concrete instances ────────────────
+	def expand_recurring_tasks(
+    	self,
+    	pet_id: int,
+    	start_date: datetime,
+    	end_date: datetime,
+    ) -> List[Task]:
+        """
+        For every recurring task on a pet, generate concrete Task instances
+        between start_date and end_date (inclusive by day) and attach them
+        to the pet.  Returns the list of newly created tasks.
+
+        - DAILY  → one copy per calendar day in the range
+        - WEEKLY → one copy per week (same weekday as the template's start_time)
+        - ONCE   → skipped (already a one-off)
+        """
+    	pet = self.owner.get_pet(pet_id)
+    	if pet is None:
+    		raise ValueError(f"Pet id {pet_id} was not found.")
+
+        # Only templates that are recurring and not yet expanded past end_date
+		templates = [t for t in pet.tasks if t.recurrence != Recurrence.ONCE]
+		new_tasks: List[Task] = []
+
+		for tmpl in templates:
+			if tmpl.recurrence == Recurrence.DAILY:
+				step = timedelta(days=1)
+			else:  # WEEKLY
+				step = timedelta(weeks=1)
+
+            # Start from the template's own date, walk forward until end_date
+            cursor = tmpl.start_time
+            while cursor.date() <= end_date.date():
+                if cursor.date() >= start_date.date() and cursor != tmpl.start_time:
+                    new_task = Task(
+                        id=self._new_id(),
+                        description=tmpl.description,
+                        start_time=cursor,
+                        duration_mins=tmpl.duration_mins,
+                        priority=tmpl.priority,
+                        recurrence=Recurrence.ONCE,  # generated copy is a one-off
+                    )
+                    pet.add_task(new_task)
+                    new_tasks.append(new_task)
+                cursor += step
+
+        return new_tasks
+
+    # ── NEW 2: Filter tasks by pet name ──────────────────────────────────────
+    def get_tasks_by_pet_name(
+        self,
+        name: str,
+        include_completed: bool = True,
+    ) -> List[Task]:
+        """
+        Return all tasks for the pet whose name matches (case-insensitive).
+        Raises ValueError if no pet with that name exists.
+		Use the helper function: get_pet_name
+        """
+        pet = self.owner.get_pet_by_name(name)
+        if pet is None:
+            raise ValueError(f"No pet named '{name}' found.")
+        tasks = list(pet.tasks)
+        if not include_completed:
+            tasks = [t for t in tasks if not t.is_completed]
+        return sorted(tasks, key=lambda t: t.start_time)
+
+
