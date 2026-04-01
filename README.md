@@ -41,3 +41,12 @@ pip install -r requirements.txt
 5. Add tests to verify key behaviors.
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
+
+## Testing PawPal+
+- Command to run tests (python -m pytest)
+- Brief description of what the tests cover: They test whether the functionalities of the program (Implement Sorting and Filtering, Automate Recurring Tasks, Detect Task Conflicts) are working properly or not.
+
+
+_Provide your "Confidence Level" (1–5 stars) in the system's reliability based on your test results._
+- 4.5/5
+
