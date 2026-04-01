@@ -1,28 +1,38 @@
-# PawPal+ (Module 2 Project)
+# PawPal+
 
-You are building **PawPal+**, a Streamlit app that helps a pet owner plan care tasks for their pet.
+PawPal+ is a Streamlit-based pet care planning app for managing multiple pets, scheduling tasks, and tracking daily care activities.
 
-## Scenario
+## Overview
 
-A busy pet owner needs help staying consistent with pet care. They want an assistant that can:
+The system is designed around five core types:
 
-- Track pet care tasks (walks, feeding, meds, enrichment, grooming, etc.)
-- Consider constraints (time available, priority, owner preferences)
-- Produce a daily plan and explain why it chose that plan
+- `Owner`: stores owner profile and owned pets.
+- `Pet`: stores pet information and pet-specific tasks.
+- `Task`: stores task details such as start time, duration, priority, completion state, and recurrence.
+- `Scheduler`: central orchestration layer for sorting, filtering, conflict detection, and recurring task automation.
+- `ConflictInfo`: structured conflict warning details returned by conflict detection.
 
-Your job is to design the system first (UML), then implement the logic in Python, then connect it to the Streamlit UI.
+## Features
 
-## What you will build
+- Time-based task sorting:
+Tasks are ordered chronologically using `start_time` so the upcoming schedule is shown in execution order.
 
-Your final app should:
+- Multi-condition task filtering:
+Tasks can be filtered by completion status (`completed` or `incomplete`) and/or by pet name (case-insensitive).
 
-- Let a user enter basic owner + pet info
-- Let a user add/edit tasks (duration + priority at minimum)
-- Generate a daily schedule/plan based on constraints and priorities
-- Display the plan clearly (and ideally explain the reasoning)
-- Include tests for the most important scheduling behaviors
+- Conflict detection with overlap logic:
+The scheduler checks overlap using interval comparison (`new_start < existing_end` and `existing_start < new_end`) and returns detailed warning data for each conflict.
 
-## Getting started
+- Conflict warnings in the UI:
+When a new task overlaps existing tasks, the app surfaces readable warnings that include pet name, task description, and time window.
+
+- Recurring task automation:
+Tasks support recurrence values (`once`, `daily`, `weekly`). When a recurring task is marked complete, the scheduler automatically creates the next occurrence with the same details and a shifted start time.
+
+- Mark-complete workflow:
+Users can mark scheduled tasks complete directly from the app. This action updates task status and triggers recurrence automation when applicable.
+
+## Getting Started
 
 ### Setup
 
@@ -32,21 +42,39 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Suggested workflow
+### Run the App
 
-1. Read the scenario carefully and identify requirements and edge cases.
-2. Draft a UML diagram (classes, attributes, methods, relationships).
-3. Convert UML into Python class stubs (no logic yet).
-4. Implement scheduling logic in small increments.
-5. Add tests to verify key behaviors.
-6. Connect your logic to the Streamlit UI in `app.py`.
-7. Refine UML so it matches what you actually built.
+```bash
+streamlit run app.py
+```
 
-## Testing PawPal+
-- Command to run tests (python -m pytest)
-- Brief description of what the tests cover: They test whether the functionalities of the program (Implement Sorting and Filtering, Automate Recurring Tasks, Detect Task Conflicts) are working properly or not.
+## Testing
 
+Run tests with:
 
-_Provide your "Confidence Level" (1–5 stars) in the system's reliability based on your test results._
-- 4.5/5
+```bash
+python -m pytest
+```
 
+Current tests check whether the following functionalities are working properly or not:
+
+- Sorting and filtering behavior
+- Recurring-task creation after completion
+- Conflict detection across single and multiple pets
+- Handling of completed tasks in conflict checks
+
+## Reliability
+
+Confidence level based on current test results: 4.5/5.
+
+## Demo
+- Add a new owner, pets
+    ![alt text](image.png)
+- Create tasks for pets
+    ![alt text](image-2.png)
+- Warning message for time conflict!
+    [alt text](image-1.png)
+- Show upcoming schedule to the user
+    ![alt text](image-3.png)
+- Mark Morning walk (daily) as complete. The scheduler moves to the next day.
+    ![alt text](image-4.png)
